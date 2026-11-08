@@ -42,7 +42,7 @@ Playback and import availability depend on the source services. Report beta issu
 
 ### Expanded player
 
-![HeadRoom expanded player with synchronized lyrics and playback controls](https://raw.githubusercontent.com/Marat-ctrl/HeadRoom/main/github/screenshots/expanded-player.png?v=2)
+![HeadRoom expanded player with synchronized lyrics and playback controls](https://raw.githubusercontent.com/Marat-ctrl/HeadRoom/main/github/screenshots/expanded-player-redacted.png)
 
 ### Playback settings
 
