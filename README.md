@@ -34,6 +34,20 @@ This beta uses an ad-hoc signature and is not notarized. If macOS blocks it on f
 
 Playback and import availability depend on the source services. Report beta issues on [GitHub Issues](https://github.com/Marat-ctrl/HeadRoom/issues).
 
+## Screenshots
+
+### Home and My Wave
+
+![HeadRoom home screen with My Wave and liked songs](github/screenshots/home.png)
+
+### Expanded player
+
+![HeadRoom expanded player with synchronized lyrics and playback controls](github/screenshots/expanded-player.png)
+
+### Playback settings
+
+![HeadRoom playback settings with audio quality and crossfade controls](github/screenshots/playback-settings.png)
+
 ## Support HeadRoom
 
 If you enjoy using HeadRoom, you can help support its development. [Donate on DonationAlerts](https://www.donationalerts.com/r/sh4wty9) · [Creator page](https://www.donationalerts.com/c/sh4wty9)
