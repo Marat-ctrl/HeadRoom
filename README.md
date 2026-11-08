@@ -36,6 +36,8 @@ Playback and import availability depend on the source services. Report beta issu
 
 ## Screenshots
 
+Album artwork and track titles are blurred in these screenshots.
+
 ### Home and My Wave
 
 ![HeadRoom home screen with My Wave and liked songs](https://raw.githubusercontent.com/Marat-ctrl/HeadRoom/main/github/screenshots/home.png?v=2)
