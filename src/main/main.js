@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, screen, shell, Tray, Menu, nativeImage, globalShortcut, powerMonitor, session, safeStorage } = require('electron');
+const { nativeTheme, app, BrowserWindow, dialog, ipcMain, screen, shell, Tray, Menu, nativeImage, globalShortcut, powerMonitor, session, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -8,20 +8,12 @@ const { pathToFileURL } = url;
 const { spawn, execFile } = require('child_process');
 const crypto = require('crypto');
 const zlib = require('zlib');
-const {
-  createCodeVerifier,
-  createCodeChallenge,
-  createOAuthState,
-  createAuthorizationUrl,
-  exchangeAuthorizationCode,
-  refreshAccessToken
-} = require('./google-oauth');
-const { fetchYouTubeLibrary } = require('./youtube-data');
 const RFACC_KEY = crypto.createHash('sha256').update('riff-account-key-v1').digest();
-const APP_ID = 'io.github.rootscripts.riff';
+const APP_ID = 'app.headroom.player';
 const IS_MAC = process.platform === 'darwin';
 
-app.setName('Riff');
+app.setName('HeadRoom');
+nativeTheme.themeSource = 'dark';
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 
 function encryptAccount(dataObj) {
@@ -48,7 +40,7 @@ function decryptAccount(buffer) {
   return JSON.parse(decompressed.toString('utf8'));
 }
 const { LIBRARY_DIR, DATA_DIR, resolveBinary, tutorialDone, markTutorialDone, readStartupConfig, writeStartupConfig, cookieJarHasYtLogin } = require('../shared/platform');
-const { getLauncherInfo, installLauncher } = require('./launcher');
+
 const { getSystemAudioOutputInfo } = require('../shared/audio-output');
 const { log, tail, LOG_DIR } = require('../shared/logger');
 const logger = { log, tail, LOG_DIR, error: (msg, err) => log('ERROR', `${msg}: ${err && err.message ? err.message : err}`) };
@@ -100,18 +92,12 @@ app.commandLine.appendSwitch('disable-background-networking');
 app.commandLine.appendSwitch('disable-domain-reliability');
 app.commandLine.appendSwitch('disable-sync');
 app.commandLine.appendSwitch('disable-speech-api');
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256 --expose-gc');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 app.commandLine.appendSwitch('disk-cache-size', '25165824');
 app.commandLine.appendSwitch('media-cache-size', '25165824');
 
-setInterval(() => {
-  try {
-    session.defaultSession.clearCache().catch(() => {});
-    if (global.gc) global.gc();
-  } catch (_) {}
-}, 90000);
 app.on('ready', () => {
   const cleanUA = (app.userAgentFallback || '').replace(/\s*Electron\/[^\s]+/gi, '').replace(/\s*riff\/[^\s]+/gi, '');
   if (cleanUA) app.userAgentFallback = cleanUA;
@@ -137,17 +123,11 @@ if (process.env.RIFF_DEBUG === '1') {
   });
 }
 
-if (process.argv.includes('lyrics') || process.argv.includes('--lyrics')) {
-  const cliPath = path.join(__dirname, 'cli.js');
-  const child = spawn(process.execPath, [cliPath, 'lyrics'], { stdio: 'inherit', env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }) });
-  child.on('exit', (code) => process.exit(code || 0));
-} else {
-  runGUI();
-}
+runGUI();
 
 function runGUI() {
   const { startServer, PORT, getServerToken } = require('../server/server');
-  const discordRPC = require('./discord');
+
 
   let mainWindow = null;
   const allowMulti = !!readStartupConfig().multiInstance;
@@ -369,7 +349,7 @@ function runGUI() {
 
   async function createWindow() {
     serverPort = await startServer(PORT);
-    const firstRun = !tutorialDone();
+    const firstRun = false;
     const initialBounds = getResponsiveWindowBounds();
     const savedState = readWindowState();
 
@@ -383,12 +363,11 @@ function runGUI() {
       height: initialBounds.height,
       minWidth: 800,
       minHeight: 540,
-                                   backgroundColor: firstRun ? '#8d5ef2' : '#000000',
-                                   title: 'Riff',
+                                   backgroundColor: '#151515',
+                                   title: 'HeadRoom',
                                    icon: path.join(__dirname, '../../assets', 'icon.png'),
                                    frame: IS_MAC,
-                                   titleBarStyle: IS_MAC ? 'hiddenInset' : 'hidden',
-                                   ...(IS_MAC ? { trafficLightPosition: { x: 14, y: 13 } } : {}),
+                                   titleBarStyle: IS_MAC ? 'default' : 'hidden',
                                    show: false,
                                    useContentSize: true,
                                    webPreferences: {
@@ -401,6 +380,11 @@ function runGUI() {
                                    spellcheck: false
                                    }
     });
+
+    if (IS_MAC) {
+      ['show', 'restore', 'maximize', 'unmaximize', 'leave-full-screen'].forEach(event => mainWindow.on(event, syncWindowButtons));
+      syncWindowButtons();
+    }
 
     if (savedState?.isMaximized) {
       mainWindow.maximize();
@@ -416,13 +400,13 @@ function runGUI() {
       ipcMain.removeAllListeners('welcome-finish');
       ipcMain.once('welcome-finish', (e, detail) => {
         markTutorialDone();
-        if (detail && detail.launcher) installLauncher();
+
         if (!mainWindow || mainWindow.isDestroyed()) return;
         const result = detail && !detail.skipped ? detail : null;
         mainWindow.setBackgroundColor('#000000');
         mainWindow.webContents.once('did-finish-load', () => { if (result) mainWindow.webContents.send('welcome-result', result); });
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-        require('./updater').initUpdater(() => mainWindow);
+
       });
     }
 
@@ -447,12 +431,7 @@ function runGUI() {
     mainWindow.on('minimize', () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('window-visibility', false);
-        if (global.gc) global.gc();
       }
-    });
-
-    mainWindow.on('blur', () => {
-      if (global.gc) global.gc();
     });
 
     mainWindow.on('restore', () => {
@@ -486,19 +465,11 @@ function runGUI() {
       }
     });
 
-    discordRPC.initRPC();
+
   }
 
   ipcMain.removeHandler('get-server-port');
-  ipcMain.removeHandler('discord-rpc-get-enabled');
-  ipcMain.removeHandler('discord-rpc-get-connected');
-  ipcMain.removeHandler('discord-rpc-reconnect');
-  ipcMain.removeHandler('account-export');
-  ipcMain.removeHandler('account-import');
-  ipcMain.removeHandler('pick-media');
-  ipcMain.removeHandler('import-audio-files');
-  ipcMain.removeHandler('pick-local-files');
-  ipcMain.removeHandler('pick-local-folder');
+
   ipcMain.removeHandler('rescan-local-metadata');
 
   ipcMain.on('window-minimize', () => {
@@ -539,7 +510,7 @@ function runGUI() {
     });
 
     ipcMain.handle('get-diagnostics', async () => {
-      const lines = [`Riff ${app.getVersion()}`, `OS ${process.platform} ${process.arch} ${os.release()}`, `Electron ${process.versions.electron} Chromium ${process.versions.chrome} Node ${process.versions.node}`, `Locale ${app.getLocale()}`, `Data ${DATA_DIR}`];
+      const lines = [`HeadRoom ${app.getVersion()}`, `OS ${process.platform} ${process.arch} ${os.release()}`, `Electron ${process.versions.electron} Chromium ${process.versions.chrome} Node ${process.versions.node}`, `Locale ${app.getLocale()}`, `Data ${DATA_DIR}`];
       for (const name of ['yt-dlp', 'ffmpeg']) {
         const bin = resolveBinary(name);
         lines.push(`${name}: ${bin || 'NOT FOUND'}`);
@@ -550,54 +521,11 @@ function runGUI() {
     ipcMain.on('open-logs-folder', () => { shell.openPath(LOG_DIR); });
 
       ipcMain.handle('get-server-port', () => serverPort);
-      ipcMain.handle('set-app-proxy', async (event, proxyUrl) => {
-        try {
-          const clean = String(proxyUrl || '').trim();
-          const config = clean
-            ? { proxyRules: clean, proxyBypassRules: '<local>,127.0.0.1,localhost' }
-            : { mode: 'direct' };
-          await session.defaultSession.setProxy(config);
-          const googleSess = session.fromPartition('persist:riff-google');
-          if (googleSess) await googleSess.setProxy(config);
-          return { success: true };
-        } catch (e) {
-          return { success: false, error: e.message };
-        }
-      });
+
       ipcMain.handle('get-gpu-compositing', () => { try { return String(app.getGPUFeatureStatus().gpu_compositing || ''); } catch (e) { return ''; } });
-      ipcMain.handle('launcher-info', () => getLauncherInfo());
-      ipcMain.handle('install-launcher', () => {
-        try {
-          return installLauncher();
-        } catch (err) {
-          return { ok: false, error: err.message || String(err) };
-        }
-      });
+
+
       ipcMain.handle('get-audio-output-info', async () => getSystemAudioOutputInfo());
-      require('./themes').register(() => mainWindow);
-      require('./plugins').register(() => mainWindow);
-
-      ipcMain.on('discord-rpc-update', (event, trackInfo) => {
-        discordRPC.updatePresence(trackInfo);
-      });
-
-      ipcMain.on('discord-rpc-clear', () => {
-        discordRPC.clearPresence();
-      });
-
-      ipcMain.on('discord-rpc-set-enabled', (event, enabled) => {
-        discordRPC.setEnabled(enabled);
-      });
-
-      ipcMain.handle('discord-rpc-get-enabled', () => discordRPC.getEnabled());
-      ipcMain.handle('discord-rpc-get-connected', () => discordRPC.getConnected());
-      ipcMain.handle('discord-rpc-reconnect', () => {
-        if (discordRPC && discordRPC.reconnectRPC) discordRPC.reconnectRPC();
-        return true;
-      });
-      ipcMain.on('discord-rpc-reconnect', () => {
-        if (discordRPC && discordRPC.reconnectRPC) discordRPC.reconnectRPC();
-      });
 
       ipcMain.handle('get-cache-size', async () => {
         const fs = require('fs');
@@ -637,7 +565,7 @@ function runGUI() {
         const path = require('path');
         const os = require('os');
         const { session } = require('electron');
-        
+
         try { await session.defaultSession.clearCache(); } catch(e) {}
         try { await session.defaultSession.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }); } catch(e) {}
 
@@ -662,39 +590,6 @@ function runGUI() {
         } catch(e) {}
 
         return true;
-      });
-
-      ipcMain.handle('pick-media', async () => {
-        const r = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'Media', extensions: ['png','jpg','jpeg','webp','gif','mp4','webm'] }] });
-        return r.canceled ? null : pathToFileURL(r.filePaths[0]).href;
-      });
-
-      ipcMain.handle('import-audio-files', async () => {
-        const r = await dialog.showOpenDialog(mainWindow, { properties: ['openFile', 'multiSelections', 'openDirectory'], filters: [{ name: 'Audio', extensions: ['mp3','wav','flac','opus','ogg','oga','m4a','aac','webm','weba'] }] });
-        if (r.canceled) return [];
-        const AUDIO_EXT = new Set(['mp3','wav','flac','opus','ogg','oga','m4a','aac','webm','weba']);
-        const sources = [];
-        for (const p of r.filePaths) {
-          const st = fs.statSync(p);
-          if (st.isDirectory()) {
-            for (const f of fs.readdirSync(p)) {
-              const fp = path.join(p, f);
-              if (AUDIO_EXT.has(path.extname(f).slice(1).toLowerCase()) && fs.statSync(fp).isFile()) sources.push(fp);
-            }
-          } else {
-            sources.push(p);
-          }
-        }
-        fs.mkdirSync(LIBRARY_DIR, { recursive: true });
-        const out = [];
-        for (const src of sources) {
-          const st = fs.statSync(src), ext = path.extname(src).slice(1).toLowerCase();
-          const id = 'local_' + crypto.createHash('sha1').update(path.basename(src) + st.size).digest('hex').slice(0, 12);
-          const file = `${id}.${ext}`;
-          if (!fs.existsSync(path.join(LIBRARY_DIR, file))) await fs.promises.copyFile(src, path.join(LIBRARY_DIR, file));
-          out.push({ id, file, ext, name: path.basename(src, path.extname(src)) });
-        }
-        return out;
       });
 
       async function extractLocalTrackMetadata(filePath) {
@@ -1012,61 +907,6 @@ function runGUI() {
         };
       }
 
-      ipcMain.handle('pick-local-files', async () => {
-        const r = await dialog.showOpenDialog(mainWindow, {
-          properties: ['openFile', 'multiSelections'],
-          filters: [{ name: 'Audio', extensions: ['mp3', 'flac', 'wav', 'ogg', 'm4a', 'aac', 'opus', 'wma'] }]
-        });
-        if (r.canceled || !r.filePaths) return [];
-        const tracks = [];
-        for (const fp of r.filePaths) {
-          try {
-            const meta = await extractLocalTrackMetadata(fp);
-            if (meta) tracks.push(meta);
-          } catch (e) {}
-        }
-        return tracks;
-      });
-
-      ipcMain.handle('pick-local-folder', async () => {
-        const r = await dialog.showOpenDialog(mainWindow, {
-          properties: ['openDirectory', 'multiSelections']
-        });
-        if (r.canceled || !r.filePaths) return [];
-        const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.ogg', '.m4a', '.aac', '.opus', '.wma']);
-        const sources = [];
-
-        function scanDir(dir) {
-          try {
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-              const fullPath = path.join(dir, entry.name);
-              if (entry.isDirectory()) {
-                scanDir(fullPath);
-              } else if (entry.isFile()) {
-                const ext = path.extname(entry.name).toLowerCase();
-                if (AUDIO_EXT.has(ext)) {
-                  sources.push(fullPath);
-                }
-              }
-            }
-          } catch (e) {}
-        }
-
-        for (const dir of r.filePaths) {
-          scanDir(dir);
-        }
-
-        const tracks = [];
-        for (const fp of sources) {
-          try {
-            const meta = await extractLocalTrackMetadata(fp);
-            if (meta) tracks.push(meta);
-          } catch (e) {}
-        }
-        return tracks;
-      });
-
       ipcMain.handle('rescan-local-metadata', async (event, paths) => {
         if (!Array.isArray(paths)) return [];
         const tracks = [];
@@ -1082,107 +922,7 @@ function runGUI() {
         return tracks;
       });
 
-      ipcMain.handle('get-data-dir', () => {
-        const platform = require('../shared/platform');
-        return {
-          dir: platform.DATA_DIR,
-          defaultDir: platform.DEFAULT_DATA_DIR,
-          isCustom: platform.DATA_DIR !== platform.DEFAULT_DATA_DIR
-        };
-      });
-
-      ipcMain.handle('pick-data-dir', async () => {
-        const platform = require('../shared/platform');
-        const r = await dialog.showOpenDialog(mainWindow, {
-          title: 'Choose music folder',
-          defaultPath: platform.DATA_DIR,
-          properties: ['openDirectory', 'createDirectory']
-        });
-        return r.canceled ? null : r.filePaths[0];
-      });
-
-      ipcMain.handle('set-data-dir', async (event, payload) => {
-        const platform = require('../shared/platform');
-        const target = payload && payload.dir ? path.resolve(String(payload.dir)) : null;
-        const move = !!(payload && payload.move);
-        if (!target) return { ok: false, error: 'No folder selected' };
-
-        const current = path.resolve(platform.DATA_DIR);
-        if (target === current) return { ok: true, dir: target, moved: false };
-
-        const rel = path.relative(current, target);
-        const insideCurrent = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-        const relBack = path.relative(target, current);
-        const currentInsideTarget = relBack === '' || (!relBack.startsWith('..') && !path.isAbsolute(relBack));
-        if (insideCurrent || currentInsideTarget) {
-          return { ok: false, error: 'Choose a folder outside the current music folder' };
-        }
-
-        try {
-          fs.mkdirSync(target, { recursive: true });
-          fs.accessSync(target, fs.constants.W_OK);
-        } catch (e) {
-          return { ok: false, error: 'That folder is not writable' };
-        }
-
-        if (move) {
-          try {
-            await platform.copyDataEntries(current, target);
-          } catch (e) {
-            return { ok: false, error: 'Could not move files: ' + e.message };
-          }
-        }
-
-        platform.setDataDir(target);
-
-        if (move) {
-          try { await platform.removeDataEntries(current); } catch (e) {}
-        }
-
-        return { ok: true, dir: target, moved: move };
-      });
-
       const defaultDownloadsDir = () => require('../shared/platform').defaultDownloadDir();
-
-      ipcMain.handle('get-download-dir', () => {
-        const platform = require('../shared/platform');
-        const def = defaultDownloadsDir();
-        const custom = platform.resolveDownloadDir();
-        return {
-          dir: custom || def,
-          defaultDir: def,
-          isCustom: !!custom
-        };
-      });
-
-      ipcMain.handle('pick-download-dir', async () => {
-        const platform = require('../shared/platform');
-        const r = await dialog.showOpenDialog(mainWindow, {
-          title: 'Choose download folder',
-          defaultPath: platform.resolveDownloadDir() || defaultDownloadsDir() || undefined,
-          properties: ['openDirectory', 'createDirectory']
-        });
-        return r.canceled ? null : r.filePaths[0];
-      });
-
-      ipcMain.handle('set-download-dir', async (event, payload) => {
-        const platform = require('../shared/platform');
-        const reset = !!(payload && payload.reset);
-        if (reset) {
-          platform.setDownloadDir(null);
-          return { ok: true, dir: defaultDownloadsDir(), reset: true };
-        }
-        const target = payload && payload.dir ? path.resolve(String(payload.dir)) : null;
-        if (!target) return { ok: false, error: 'No folder selected' };
-        try {
-          fs.mkdirSync(target, { recursive: true });
-          fs.accessSync(target, fs.constants.W_OK);
-        } catch (e) {
-          return { ok: false, error: 'That folder is not writable' };
-        }
-        platform.setDownloadDir(target);
-        return { ok: true, dir: target };
-      });
 
       ipcMain.on('restart-app', () => {
         app.relaunch();
@@ -1240,15 +980,14 @@ function runGUI() {
         globalShortcut.unregisterAll();
       });
 
-      let windowButtonsWanted = true;
       function syncWindowButtons() {
         if (!IS_MAC || !mainWindow || mainWindow.isDestroyed()) return;
-        try { mainWindow.setWindowButtonVisibility(windowButtonsWanted && !isMiniWindow); } catch (_) {}
+        try { mainWindow.setWindowButtonVisibility(true); } catch (_) {}
       }
       ipcMain.on('set-window-buttons-visible', (e, visible) => {
-        windowButtonsWanted = !!visible;
         syncWindowButtons();
       });
+
 
       const GLOBAL_SHORTCUTS = {
         'CommandOrControl+Shift+Space': 'play-pause',
@@ -1306,80 +1045,7 @@ function runGUI() {
         }
       });
 
-      ipcMain.removeHandler('set-mini-lyrics');
-      ipcMain.handle('set-mini-lyrics', (e, enabled) => {
-        if (!mainWindow || mainWindow.isDestroyed() || !isMiniWindow) return false;
-        const bounds = mainWindow.getBounds();
-        const display = screen.getDisplayMatching(bounds);
-        const maxH = Math.floor(display.workArea.height * 0.9);
-        if (enabled) {
-          if (!preMiniLyricsH) preMiniLyricsH = bounds.height;
-          mainWindow.setMinimumSize(320, 240);
-          const targetH = Math.min(Math.max(bounds.height, 360), maxH);
-          if (bounds.y + targetH > display.workArea.y + display.workArea.height) {
-            const newY = Math.max(display.workArea.y, display.workArea.y + display.workArea.height - targetH);
-            mainWindow.setBounds({ x: bounds.x, y: newY, width: bounds.width, height: targetH });
-          } else {
-            mainWindow.setSize(bounds.width, targetH);
-          }
-        } else {
-          mainWindow.setMinimumSize(320, 140);
-          const targetH = preMiniLyricsH || 160;
-          mainWindow.setSize(bounds.width, targetH);
-          preMiniLyricsH = null;
-        }
-        return true;
-      });
-
       ipcMain.handle('get-app-version', () => app.getVersion());
-
-      ipcMain.handle('save-playlists-json', async (event, payload) => {
-        const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
-        const defaultName = payload && payload.defaultName ? payload.defaultName : 'playlists.json';
-        const content = payload && payload.content ? payload.content : '';
-        const r = await dialog.showSaveDialog(win, {
-          title: 'Export playlists as JSON',
-          defaultPath: defaultName,
-          filters: [{ name: 'JSON', extensions: ['json'] }]
-        });
-        if (r.canceled || !r.filePath) return { canceled: true };
-        await fs.promises.writeFile(r.filePath, content, 'utf8');
-        return { success: true, filePath: r.filePath };
-      });
-
-      ipcMain.handle('account-export', async (event, payload) => {
-        try {
-          const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
-          const r = await dialog.showSaveDialog(win, {
-            title: 'Export Riff account',
-            defaultPath: 'riff-account.rfacc',
-            filters: [{ name: 'Riff Account (.rfacc)', extensions: ['rfacc'] }]
-          });
-          if (r.canceled || !r.filePath) return { canceled: true };
-          const buffer = encryptAccount(payload || {});
-          await fs.promises.writeFile(r.filePath, buffer);
-          return { success: true, filePath: r.filePath };
-        } catch (err) {
-          return { success: false, error: err.message };
-        }
-      });
-
-      ipcMain.handle('account-import', async (event) => {
-        try {
-          const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
-          const r = await dialog.showOpenDialog(win, {
-            title: 'Import Riff account',
-            properties: ['openFile'],
-            filters: [{ name: 'Riff Account (.rfacc)', extensions: ['rfacc'] }]
-          });
-          if (r.canceled || !r.filePaths || !r.filePaths.length) return { canceled: true };
-          const buffer = await fs.promises.readFile(r.filePaths[0]);
-          const data = decryptAccount(buffer);
-          return { success: true, data, filePath: r.filePaths[0] };
-        } catch (err) {
-          return { success: false, error: err.message };
-        }
-      });
 
       ipcMain.handle('show-playlist-context-menu', async (event, playlistId, options = {}) => {
         const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
@@ -1639,26 +1305,6 @@ function runGUI() {
         });
       }
 
-      ipcMain.handle('youtube-playback-status', () => ({
-        loggedIn: hasValidYtCookiesFile()
-      }));
-
-      ipcMain.handle('youtube-playback-login', async () => {
-        return await openYoutubeSignInWindow();
-      });
-
-      ipcMain.handle('youtube-playback-logout', async () => {
-        try {
-          fs.mkdirSync(DATA_DIR, { recursive: true });
-          await fs.promises.writeFile(YT_LOGOUT_FLAG, '1', 'utf8');
-          await fs.promises.rm(YT_COOKIES_FILE, { force: true });
-          await session.fromPartition('persist:riff-google').clearStorageData({ storages: ['cookies'] });
-          return { success: true, loggedIn: false };
-        } catch (error) {
-          return { success: false, error: error && error.message ? error.message : 'Could not sign out of YouTube.' };
-        }
-      });
-
       function getSystemDefaultBrowserSpec() {
         try {
           if (process.platform === 'linux') {
@@ -1860,14 +1506,14 @@ function runGUI() {
               const actual = Buffer.from(returnedState);
               if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
                 res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-                res.end('Authorization could not be verified. Return to Riff and try again.');
+                res.end('Authorization could not be verified. Return to HeadRoom and try again.');
                 finish(new Error('Google authorization state did not match'));
                 return;
               }
               const providerError = requestUrl.searchParams.get('error');
               if (providerError) {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-                res.end('<!doctype html><title>Riff</title><p>Google sign-in was cancelled. You can close this tab and return to Riff.</p>');
+                res.end('<!doctype html><title>HeadRoom</title><p>Google sign-in was cancelled. You can close this tab and return to HeadRoom.</p>');
                 finish(new Error(providerError === 'access_denied'
                   ? 'Google sign-in was cancelled'
                   : `Google authorization failed: ${providerError}`));
@@ -1876,12 +1522,12 @@ function runGUI() {
               const code = requestUrl.searchParams.get('code');
               if (!code) {
                 res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-                res.end('Google did not return an authorization code. Return to Riff and try again.');
+                res.end('Google did not return an authorization code. Return to HeadRoom and try again.');
                 finish(new Error('Google did not return an authorization code'));
                 return;
               }
               res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-              res.end('<!doctype html><title>Riff</title><p>Google account connected. You can close this tab and return to Riff.</p>');
+              res.end('<!doctype html><title>HeadRoom</title><p>Google account connected. You can close this tab and return to HeadRoom.</p>');
               finish(null, { code });
             };
             server.on('request', onRequest);
@@ -1894,7 +1540,7 @@ function runGUI() {
             codeVerifier
           });
           if (!tokens.refresh_token) {
-            throw new Error('Google did not provide a refresh token. Revoke Riff access in your Google account and try again.');
+            throw new Error('Google did not provide a refresh token. Revoke HeadRoom access in your Google account and try again.');
           }
           writeGoogleOAuthData({
             accessToken: tokens.access_token,
@@ -1910,390 +1556,14 @@ function runGUI() {
         }
       }
 
-      ipcMain.handle('google-auth-status', async () => {
-        const hasCookies = hasValidYtCookiesFile();
-        if (hasCookies) {
-          await importYoutubeCookiesToSession().catch(() => {});
-          return { loggedIn: true };
-        }
-        return { loggedIn: false };
-      });
-
-      ipcMain.handle('google-logout', async () => {
-        let revokeToken = '';
-        let warning = '';
-        try {
-          const auth = readGoogleOAuthData();
-          revokeToken = auth && auth.refreshToken ? auth.refreshToken : '';
-        } catch (e) {
-          warning = e && e.message ? e.message : 'Could not read the saved Google account';
-        }
-        try {
-          fs.mkdirSync(DATA_DIR, { recursive: true });
-          fs.writeFileSync(YT_LOGOUT_FLAG, '1', 'utf8');
-          if (fs.existsSync(GOOGLE_OAUTH_FILE)) fs.unlinkSync(GOOGLE_OAUTH_FILE);
-          if (fs.existsSync(YT_COOKIES_FILE)) fs.unlinkSync(YT_COOKIES_FILE);
-          const s = session.fromPartition('persist:riff-google');
-          await s.clearStorageData();
-        } catch (e) {
-          return { success: false, error: e && e.message ? e.message : 'Logout failed' };
-        }
-        if (revokeToken) {
-          try {
-            const response = await fetch('https://oauth2.googleapis.com/revoke', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({ token: revokeToken }),
-              signal: AbortSignal.timeout(10000)
-            });
-            if (!response.ok) warning = 'Signed out locally, but Google did not confirm token revocation.';
-          } catch (_) {
-            warning = 'Signed out locally, but Google could not be reached to revoke the token.';
-          }
-        }
-        return { success: true, warning };
-      });
-
-      ipcMain.handle('google-login', async () => {
-        return await openYoutubeSignInWindow();
-      });
-
-      ipcMain.handle('google-import-library', async (event, opts) => {
-        const platform = (opts && opts.platform === 'ytmusic') ? 'ytmusic' : 'youtube';
-        const doLikes = !opts || opts.doLikes !== false;
-        const doPlaylists = !opts || opts.doPlaylists !== false;
-
-        if (hasValidYtCookiesFile()) {
-          await importYoutubeCookiesToSession().catch(() => {});
-        }
-
-        const s = session.fromPartition('persist:riff-google');
-        const cookies = await s.cookies.get({});
-        const sapisidCookie = Array.isArray(cookies) ? (
-          cookies.find(c => c && c.name === 'SAPISID' && c.value) ||
-          cookies.find(c => c && c.name === '__Secure-3PAPISID' && c.value) ||
-          cookies.find(c => c && c.name === '__Secure-1PAPISID' && c.value)
-        ) : null;
-        if (!sapisidCookie) {
-          return { success: false, error: 'YouTube import requires an active YouTube browser session.' };
-        }
-        const sapisid = sapisidCookie.value;
-
-        const isYtm = platform === 'ytmusic';
-        const browseUrl = isYtm
-          ? 'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false'
-          : 'https://www.youtube.com/youtubei/v1/browse?prettyPrint=false';
-        const origin = isYtm ? 'https://music.youtube.com' : 'https://www.youtube.com';
-        const clientName = isYtm ? 'WEB_REMIX' : 'WEB';
-        const clientVersion = isYtm ? '1.20240401.01.00' : '2.20240401.01.00';
-        const likedBrowseId = isYtm ? 'VLLM' : 'VLLL';
-        const playlistsBrowseId = isYtm ? 'FEmusic_liked_playlists' : 'FEplaylist_aggregation';
-
-        function extractText(node) {
-          if (!node) return '';
-          if (typeof node === 'string') return node;
-          if (typeof node.simpleText === 'string') return node.simpleText;
-          if (Array.isArray(node.runs)) return node.runs.map(r => (r && r.text) || '').join('');
-          return '';
-        }
-
-        function parseDurationSec(val) {
-          if (!val) return 0;
-          if (typeof val === 'number') return val;
-          const str = String(val).trim();
-          const m = str.match(/(?:(\d+):)?(\d+):(\d+)/);
-          if (m) {
-            const h = m[1] ? parseInt(m[1], 10) : 0;
-            const min = parseInt(m[2], 10);
-            const sec = parseInt(m[3], 10);
-            return h * 3600 + min * 60 + sec;
-          }
-          const num = parseInt(str, 10);
-          return Number.isFinite(num) ? num : 0;
-        }
-
-        function findContinuationToken(node, visited = new Set()) {
-          if (!node || typeof node !== 'object') return null;
-          if (visited.has(node)) return null;
-          visited.add(node);
-          if (typeof node.continuation === 'string' && node.continuation) return node.continuation;
-          if (typeof node.token === 'string' && node.token) return node.token;
-          if (node.continuationCommand && typeof node.continuationCommand.token === 'string') {
-            return node.continuationCommand.token;
-          }
-          if (node.nextContinuationData && typeof node.nextContinuationData.continuation === 'string') {
-            return node.nextContinuationData.continuation;
-          }
-          for (const k of Object.keys(node)) {
-            const res = findContinuationToken(node[k], visited);
-            if (res) return res;
-          }
-          return null;
-        }
-
-        function extractTracksGeneric(root) {
-          const tracks = [];
-          const seenIds = new Set();
-          function walk(node, visited = new Set()) {
-            if (!node || typeof node !== 'object') return;
-            if (visited.has(node)) return;
-            visited.add(node);
-            if (node.musicResponsiveListItemRenderer) {
-              const r = node.musicResponsiveListItemRenderer;
-              let videoId = (r.playlistItemData && r.playlistItemData.videoId) ? r.playlistItemData.videoId : null;
-              if (!videoId) {
-                const findVid = (obj) => {
-                  if (!obj || typeof obj !== 'object') return null;
-                  if (obj.watchEndpoint && typeof obj.watchEndpoint.videoId === 'string') return obj.watchEndpoint.videoId;
-                  for (const k of Object.keys(obj)) {
-                    const v = findVid(obj[k]);
-                    if (v) return v;
-                  }
-                  return null;
-                };
-                videoId = findVid(r);
-              }
-              if (videoId && !seenIds.has(videoId)) {
-                seenIds.add(videoId);
-                const title = extractText(r.flexColumns && r.flexColumns[0] && r.flexColumns[0].musicResponsiveListItemFlexColumnRenderer && r.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text) || 'untitled';
-                let artist = '';
-                if (r.flexColumns && r.flexColumns[1]) {
-                  const runs = r.flexColumns[1].musicResponsiveListItemFlexColumnRenderer && r.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text && r.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text.runs;
-                  if (Array.isArray(runs) && runs.length > 0) {
-                    artist = runs[0].text || '';
-                  } else {
-                    artist = extractText(r.flexColumns[1].musicResponsiveListItemFlexColumnRenderer && r.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text);
-                  }
-                }
-                let duration = 0;
-                const findDur = (obj) => {
-                  if (!obj || typeof obj !== 'object') return;
-                  if (Array.isArray(obj.runs)) {
-                    for (const ru of obj.runs) {
-                      if (ru && ru.text && /^\d+:\d+(:\d+)?$/.test(ru.text.trim())) {
-                        duration = parseDurationSec(ru.text.trim());
-                        return;
-                      }
-                    }
-                  }
-                  for (const k of Object.keys(obj)) {
-                    if (!duration) findDur(obj[k]);
-                  }
-                };
-                findDur(r);
-                const thumbs = r.thumbnail && r.thumbnail.musicThumbnailRenderer && r.thumbnail.musicThumbnailRenderer.thumbnail && r.thumbnail.musicThumbnailRenderer.thumbnail.thumbnails;
-                const cover = (Array.isArray(thumbs) && thumbs.length > 0) ? thumbs[thumbs.length - 1].url : '';
-                tracks.push({ videoId, title, artist, duration, cover });
-              }
-            } else if (node.playlistVideoRenderer || node.videoRenderer || node.compactVideoRenderer) {
-              const r = node.playlistVideoRenderer || node.videoRenderer || node.compactVideoRenderer;
-              const videoId = r.videoId;
-              if (videoId && !seenIds.has(videoId)) {
-                seenIds.add(videoId);
-                const title = extractText(r.title) || 'untitled';
-                const artist = extractText(r.shortBylineText) || extractText(r.ownerText) || '';
-                const duration = r.lengthSeconds ? parseInt(r.lengthSeconds, 10) : parseDurationSec(extractText(r.lengthText));
-                const thumbs = (r.thumbnail && r.thumbnail.thumbnails) || (r.thumbnails && r.thumbnails[0] && r.thumbnails[0].thumbnails);
-                const cover = (Array.isArray(thumbs) && thumbs.length > 0) ? thumbs[thumbs.length - 1].url : '';
-                tracks.push({ videoId, title, artist, duration, cover });
-              }
-            }
-            if (Array.isArray(node)) {
-              for (const item of node) walk(item, visited);
-            } else {
-              for (const k of Object.keys(node)) walk(node[k], visited);
-            }
-          }
-          walk(root);
-          return tracks;
-        }
-
-        function extractPlaylistsGeneric(root) {
-          const playlists = [];
-          const seenIds = new Set();
-          function walk(node, visited = new Set()) {
-            if (!node || typeof node !== 'object') return;
-            if (visited.has(node)) return;
-            visited.add(node);
-            if (node.musicTwoRowItemRenderer) {
-              const r = node.musicTwoRowItemRenderer;
-              const title = extractText(r.title);
-              let browseId = r.navigationEndpoint && r.navigationEndpoint.browseEndpoint && r.navigationEndpoint.browseEndpoint.browseId;
-              if (!browseId) {
-                const findBrowse = (obj) => {
-                  if (!obj || typeof obj !== 'object') return null;
-                  if (obj.browseEndpoint && typeof obj.browseEndpoint.browseId === 'string') return obj.browseEndpoint.browseId;
-                  for (const k of Object.keys(obj)) {
-                    const b = findBrowse(obj[k]);
-                    if (b) return b;
-                  }
-                  return null;
-                };
-                browseId = findBrowse(r);
-              }
-              if (browseId && !seenIds.has(browseId) && (browseId.startsWith('VL') || browseId.startsWith('PL') || browseId.startsWith('MPREb_') || browseId.includes('playlist') || browseId.startsWith('RD'))) {
-                seenIds.add(browseId);
-                const thumbs = r.thumbnailRenderer && r.thumbnailRenderer.musicThumbnailRenderer && r.thumbnailRenderer.musicThumbnailRenderer.thumbnail && r.thumbnailRenderer.musicThumbnailRenderer.thumbnail.thumbnails;
-                const cover = (Array.isArray(thumbs) && thumbs.length > 0) ? thumbs[thumbs.length - 1].url : '';
-                playlists.push({ id: browseId, name: title || 'Playlist', cover });
-              }
-            } else if (node.gridPlaylistRenderer || node.playlistRenderer || node.compactPlaylistRenderer) {
-              const r = node.gridPlaylistRenderer || node.playlistRenderer || node.compactPlaylistRenderer;
-              const id = r.playlistId || (r.navigationEndpoint && r.navigationEndpoint.browseEndpoint && r.navigationEndpoint.browseEndpoint.browseId);
-              const title = extractText(r.title);
-              if (id && !seenIds.has(id)) {
-                seenIds.add(id);
-                const thumbs = (r.thumbnail && r.thumbnail.thumbnails) || (r.thumbnails && r.thumbnails[0] && r.thumbnails[0].thumbnails);
-                const cover = (Array.isArray(thumbs) && thumbs.length > 0) ? thumbs[thumbs.length - 1].url : '';
-                playlists.push({ id, name: title || 'Playlist', cover });
-              }
-            }
-            if (Array.isArray(node)) {
-              for (const item of node) walk(item, visited);
-            } else {
-              for (const k of Object.keys(node)) walk(node[k], visited);
-            }
-          }
-          walk(root);
-          return playlists;
-        }
-
-        async function fetchInnertube(browseId, continuationToken = null) {
-          const ts = Math.floor(Date.now() / 1000);
-          const hash = crypto.createHash('sha1').update(`${ts} ${sapisid} ${origin}`).digest('hex');
-          const headers = {
-            'Authorization': `SAPISIDHASH ${ts}_${hash}`,
-            'Content-Type': 'application/json',
-            'Origin': origin,
-            'Referer': `${origin}/`,
-            'X-Origin': origin,
-            'X-Goog-AuthUser': '0'
-          };
-          const body = {
-            context: {
-              client: {
-                clientName,
-                clientVersion,
-                hl: 'en'
-              }
-            }
-          };
-          let targetUrl = browseUrl;
-          if (continuationToken) {
-            body.continuation = continuationToken;
-            targetUrl = `${browseUrl}&continuation=${encodeURIComponent(continuationToken)}`;
-          } else if (browseId) {
-            body.browseId = browseId;
-          }
-          const res = await s.fetch(targetUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body)
-          });
-          if (!res.ok) {
-            throw new Error(`Innertube request failed: ${res.status}`);
-          }
-          return await res.json();
-        }
-
-        async function fetchAllTracks(browseId) {
-          let initial = await fetchInnertube(browseId);
-          let tracks = extractTracksGeneric(initial);
-          let token = findContinuationToken(initial);
-          let safety = 0;
-          while (token && safety < 30) {
-            safety++;
-            const contData = await fetchInnertube(null, token);
-            const newTracks = extractTracksGeneric(contData);
-            if (!newTracks.length) break;
-            tracks = tracks.concat(newTracks);
-            const nextToken = findContinuationToken(contData);
-            if (!nextToken || nextToken === token) break;
-            token = nextToken;
-          }
-          return tracks;
-        }
-
-        async function fetchAllPlaylists(browseId) {
-          let initial = await fetchInnertube(browseId);
-          let playlists = extractPlaylistsGeneric(initial);
-          let token = findContinuationToken(initial);
-          let safety = 0;
-          while (token && safety < 20) {
-            safety++;
-            const contData = await fetchInnertube(null, token);
-            const newPlaylists = extractPlaylistsGeneric(contData);
-            if (!newPlaylists.length) break;
-            playlists = playlists.concat(newPlaylists);
-            const nextToken = findContinuationToken(contData);
-            if (!nextToken || nextToken === token) break;
-            token = nextToken;
-          }
-          return playlists;
-        }
-
-        try {
-          let likes = [];
-          if (doLikes) {
-            const rawLikes = await fetchAllTracks(likedBrowseId);
-            likes = rawLikes.map(t => ({
-              title: t.title,
-              artist: t.artist,
-              duration: t.duration,
-              id: t.videoId,
-              url: `https://www.youtube.com/watch?v=${t.videoId}`,
-              platform,
-              thumbnail: t.cover,
-              cover: t.cover
-            }));
-          }
-
-          let playlists = [];
-          if (doPlaylists) {
-            const rawPlaylists = await fetchAllPlaylists(playlistsBrowseId);
-            for (const pl of rawPlaylists) {
-              try {
-                const plBrowseId = pl.id.startsWith('VL') ? pl.id : `VL${pl.id}`;
-                const plTracks = await fetchAllTracks(plBrowseId);
-                playlists.push({
-                  id: pl.id,
-                  name: pl.name,
-                  cover: pl.cover,
-                  tracks: plTracks.map(t => ({
-                    title: t.title,
-                    artist: t.artist,
-                    duration: t.duration,
-                    id: t.videoId,
-                    url: `https://www.youtube.com/watch?v=${t.videoId}`,
-                    platform,
-                    thumbnail: t.cover,
-                    cover: t.cover
-                  }))
-                });
-              } catch (e) {
-                playlists.push({
-                  id: pl.id,
-                  name: pl.name,
-                  cover: pl.cover,
-                  tracks: []
-                });
-              }
-            }
-          }
-
-          return { success: true, likes, playlists };
-        } catch (err) {
-          return { success: false, error: (err && err.message) ? err.message : 'Failed to fetch library' };
-        }
-      });
-
       function setupTray() {
         try {
-          const iconPath = path.join(__dirname, '../../assets', 'icon.png');
+          const iconPath = path.join(__dirname, '../../assets', IS_MAC ? 'trayTemplate.png' : 'icon.png');
           let trayIcon = nativeImage.createFromPath(iconPath);
-          trayIcon = trayIcon.resize({ width: 22, height: 22 });
+          trayIcon = trayIcon.resize({ width: IS_MAC ? 18 : 22, height: IS_MAC ? 18 : 22 });
+          if (IS_MAC) trayIcon.setTemplateImage(true);
           tray = new Tray(trayIcon);
-          tray.setToolTip('Riff');
+          tray.setToolTip('HeadRoom');
           const contextMenu = Menu.buildFromTemplate([
             {
               label: 'Show/Hide',
@@ -2339,14 +1609,14 @@ function runGUI() {
       app.whenReady().then(() => {
         if (!fs.existsSync(YT_LOGOUT_FLAG)) exportYoutubeCookiesToDisk().catch(() => {});
         global.riffSessionFetch = (urlStr, opts) => session.defaultSession.fetch(urlStr, opts);
-        if (process.platform === 'darwin' && app.dock) {
+        if (!app.isPackaged && process.platform === 'darwin' && app.dock) {
           try {
             const dockIcon = nativeImage.createFromPath(path.join(__dirname, '../../assets', 'icon.png'));
             if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
           } catch (_) {}
         }
         setupTray();
-        try { require('./launcher').refreshLauncherOnStartup?.(); } catch (_) {}
+
         try {
           session.defaultSession.webRequest.onBeforeSendHeaders(
             { urls: ['*://*.googlevideo.com/*'] },
@@ -2406,7 +1676,7 @@ function runGUI() {
         } catch (_) {}
         createWindow();
         syncGlobalShortcuts();
-        if (tutorialDone()) require('./updater').initUpdater(() => mainWindow);
+
         app.on('activate', () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
@@ -2419,7 +1689,7 @@ function runGUI() {
       });
 
       app.on('window-all-closed', () => {
-        discordRPC.destroyRPC();
+
         if (process.platform !== 'darwin') app.quit();
       });
 }

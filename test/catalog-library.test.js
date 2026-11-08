@@ -1,0 +1,8 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {create}=require('../src/renderer/catalog-library');
+function storage(initial={}){const map=new Map(Object.entries(initial));return{getItem:k=>map.get(k)||null,setItem:(k,v)=>map.set(k,v),map};}
+test('saved albums and artists persist by browse ID and can be removed without affecting songs',()=>{
+ const store=storage({devsize_favorites:'[{"id":"song"}]'});let lib=create(store);lib.toggle('albums',{id:'MPREbalbum',title:'Album',_tracks:Array(200).fill('song'),url:'temporary audio URL'});lib.toggle('artists',{id:'UCartist',title:'Artist'});lib=create(store);assert.equal(lib.has('albums','MPREbalbum'),true);assert.equal(lib.list('artists')[0].name,'Artist');assert.equal(lib.list('albums')[0]._tracks,undefined);assert.equal(lib.list('albums')[0].url,undefined);assert.equal(lib.toggle('albums',{id:'MPREbalbum',title:'Album'}),false);assert.equal(lib.list('albums').length,0);assert.equal(store.getItem('devsize_favorites'),'[{"id":"song"}]');
+});
+test('legacy entries survive a toggle and malformed data never blocks the library',()=>{
+ const store=storage({riff_saved_albums:'[{"id":123,"title":"Legacy"}]',riff_favorite_artists:'["Old artist"]'});const lib=create(store);lib.toggle('albums',{id:'MPREbnew',title:'New'});lib.toggle('artists',{id:'UCnew',title:'New Artist'});assert.equal(JSON.parse(store.getItem('riff_saved_albums'))[0].id,123);assert.equal(JSON.parse(store.getItem('riff_favorite_artists'))[0],'Old artist');assert.equal(lib.list('albums').length,1);assert.throws(()=>lib.toggle('albums',{id:'123',title:'Wrong'}),/Invalid/);store.setItem('riff_saved_albums','broken');assert.deepEqual(lib.list('albums'),[]);
+});

@@ -13,15 +13,15 @@ if (process.platform === 'darwin') {
 }
 
 const DEFAULT_DATA_DIR = IS_WIN
-  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Riff')
+  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'HeadRoom')
   : process.platform === 'darwin'
-  ? path.join(os.homedir(), 'Library', 'Application Support', 'Riff')
+  ? path.join(os.homedir(), 'Library', 'Application Support', 'HeadRoom')
   : path.join(os.homedir(), '.cache', 'devsize');
 
 const CONFIG_DIR = IS_WIN
-  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Riff')
+  ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'HeadRoom')
   : process.platform === 'darwin'
-  ? path.join(os.homedir(), 'Library', 'Application Support', 'Riff')
+  ? path.join(os.homedir(), 'Library', 'Application Support', 'HeadRoom')
   : path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'devsize');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 
@@ -93,8 +93,8 @@ const METADATA_PATH = path.join(DATA_DIR, 'metadata.json');
 const LIBRARY_DIR = path.join(DATA_DIR, 'library');
 const LIBRARY_PATH = path.join(DATA_DIR, 'library.json');
 const BIN_DIR = path.join(DATA_DIR, 'bin');
-const TUTORIAL_MARKER = IS_WIN ? 'C:\\Riff\\.rifftutorial' : path.join(os.homedir(), '.rifftutorial');
-const TUTORIAL_MARKER_FALLBACK = path.join(DATA_DIR, '.rifftutorial');
+const TUTORIAL_MARKER = IS_WIN ? 'C:\\HeadRoom\\.headroomtutorial' : path.join(os.homedir(), '.headroomtutorial');
+const TUTORIAL_MARKER_FALLBACK = path.join(DATA_DIR, '.headroomtutorial');
 const STARTUP_PATH = path.join(DATA_DIR, 'startup.json');
 function readStartupConfig() { try { return JSON.parse(fs.readFileSync(STARTUP_PATH, 'utf8')) || {}; } catch (e) { return {}; } }
 function writeStartupConfig(patch) {
@@ -150,7 +150,7 @@ async function removeDirContents(dir, skipNames = new Set(['config.json'])) {
 const RIFF_DATA_ENTRIES = [
   'tracks', 'custom-lyrics', 'lyrics', 'thumbnails', 'library', 'bin', 'plugins', 'themes', 'logs', 'i18n',
   'metadata.json', 'library.json', 'startup.json', 'yt-cookies.txt', 'google-oauth.enc', 'spotify-auth.enc',
-  '.yt-logged-out', '.rifftutorial'
+  '.yt-logged-out', '.headroomtutorial'
 ];
 
 async function copyDataEntries(fromDir, toDir) {
@@ -237,6 +237,7 @@ function resolveBinary(name) {
   const envKey = `RIFF_${name.replace(/[^a-z0-9]/gi, '').toUpperCase()}`;
   const candidates = [
     process.env[envKey],
+    require('./bundled-tools').managedBinary(BIN_DIR, exe),
     path.join(BIN_DIR, exe),
     process.resourcesPath && path.join(process.resourcesPath, 'bin', exe),
     path.join(__dirname, '../../bin', exe)

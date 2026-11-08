@@ -66,9 +66,9 @@ body:
       label: Desktop Environment
       description: Your OS and environment details.
       value: |
-        - OS: [e.g. Linux (Arch / Ubuntu / Fedora) / Windows 10/11]
-        - Display Server: [e.g. Wayland / X11] (if Linux)
-        - Package / Install type: [e.g. AppImage / DEB / AUR / source]
+        - macOS version:
+        - Apple Silicon chip: [e.g. M1 / M2 / M3 / M4]
+        - Install type: [app / DMG / source]
         - App Version:
     validations:
       required: true

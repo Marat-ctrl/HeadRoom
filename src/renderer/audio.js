@@ -2,6 +2,8 @@
 (function (global) {
   'use strict';
 
+  const DEFAULT_VOLUME = 0.2;
+
   class RiffAudioEngine {
     constructor() {
       this.ctx = null;
@@ -37,6 +39,7 @@
       this.normLimiter = null;
       this.levelAnalyser = null;
       this.levelBuf = null;
+      this.levelMeterEnabled = false;
       this.fadeGain = null;
       this.bus = null;
       this._analyserConnected = false;
@@ -64,7 +67,7 @@
         eqBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
       };
       this.isMuted = false;
-      this.volume = 0.85;
+      this.volume = DEFAULT_VOLUME;
     }
 
 
@@ -242,7 +245,6 @@
           this.normLimiter.connect(this.analyserNode);
           this.analyserNode.connect(this.fadeGain);
           this.fadeGain.connect(this.ctx.destination);
-          this.eqHigh.connect(this.levelAnalyser);
 
           this.graphInitialized = true;
           this._updateRouting();
@@ -312,6 +314,7 @@
 
       this.bus.connect(this.dryGain);
       this.dryGain.connect(this.masterGain);
+      if (this.levelMeterEnabled) this.dryGain.connect(this.levelAnalyser);
 
       if (isDistortionOn) {
         this.bus.connect(this.distortionNode);
@@ -518,7 +521,7 @@
           }
         } catch (_) {}
       }
-      const raw = this.isMuted ? 0 : Math.max(0, Math.min(1, Number.isFinite(this.volume) ? this.volume : 0.85));
+      const raw = this.isMuted ? 0 : Math.max(0, Math.min(1, Number.isFinite(this.volume) ? this.volume : DEFAULT_VOLUME));
       const vol = raw * raw;
       this.appliedElementVolume = vol;
       if (this._attachedElement) {
@@ -607,12 +610,21 @@
       if (this.analyserNode) this.analyserNode.getByteTimeDomainData(buffer);
     }
 
+    setLevelMeterEnabled(enabled) {
+      if (enabled === this.levelMeterEnabled) return;
+      this.levelMeterEnabled = enabled;
+      if (!this.graphInitialized) return;
+      if (enabled) this.dryGain.connect(this.levelAnalyser);
+      else this.dryGain.disconnect(this.levelAnalyser);
+    }
+
     getLevelDb() {
-      if (!this.levelAnalyser) return -120;
+      const listeningGain = this._attachedElement?.volume ?? 1;
+      if (!this.levelAnalyser || !listeningGain) return -120;
       this.levelAnalyser.getFloatTimeDomainData(this.levelBuf);
       let sum = 0;
       for (let i = 0; i < this.levelBuf.length; i++) sum += this.levelBuf[i] * this.levelBuf[i];
-      const rms = Math.sqrt(sum / this.levelBuf.length);
+      const rms = Math.sqrt(sum / this.levelBuf.length) / listeningGain;
       return rms > 0 ? 20 * Math.log10(rms) : -120;
     }
 

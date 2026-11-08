@@ -21,3 +21,5 @@ storage.json
 *.enc
 *.tmp
 .yt-logged-out
+
+.tool-bundles/

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+      - '!v*-*'
 
 permissions:
   contents: write
@@ -20,17 +21,7 @@ jobs:
 
   build:
     needs: create-release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            flag: --win
-          - os: ubuntu-latest
-            flag: --linux
-          - os: macos-latest
-            flag: --mac dmg zip --x64 --arm64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,4 +37,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npx electron-builder ${{ matrix.flag }} --publish always
+        run: npx electron-builder --mac dmg zip --arm64 --publish never
+      - name: Upload macOS ARM64 artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/*-mac-arm64.dmg dist/*-mac-arm64.zip --clobber

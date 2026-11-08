@@ -44,3 +44,21 @@ test('resolveBinary keeps returning a cached binary that still exists', () => {
   assert.strictEqual(first, managed);
   assert.strictEqual(second, managed);
 });
+
+test('verified tool update takes priority and falls back when its file is missing', () => {
+  const binDir = path.join(dataDir, 'bin');
+  const exe = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  const updated = path.join(binDir, 'releases', 'verified', exe);
+  const legacy = path.join(binDir, exe);
+  fs.mkdirSync(path.dirname(updated), { recursive: true });
+  fs.writeFileSync(updated, '');
+  fs.writeFileSync(legacy, '');
+  fs.chmodSync(updated, 0o755);
+  fs.chmodSync(legacy, 0o755);
+  fs.writeFileSync(path.join(binDir, 'active-tools.json'), JSON.stringify({ files: { [exe]: path.relative(binDir, updated) } }));
+  clearBinaryCache();
+  assert.strictEqual(resolveBinary('yt-dlp'), updated);
+  fs.unlinkSync(updated);
+  assert.strictEqual(resolveBinary('yt-dlp'), legacy);
+  fs.rmSync(path.join(binDir, 'active-tools.json'));
+});

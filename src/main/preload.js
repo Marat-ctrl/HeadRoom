@@ -32,12 +32,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return 1.0;
     }
   },
-  clearWebFrameCache: () => {
-    try {
-      webFrame.clearCache();
-    } catch (_) {}
-  },
-
   discordRpcUpdate: (trackInfo) => ipcRenderer.send('discord-rpc-update', trackInfo),
   discordRpcClear: () => ipcRenderer.send('discord-rpc-clear'),
   discordRpcSetEnabled: (enabled) => ipcRenderer.send('discord-rpc-set-enabled', enabled),
@@ -102,14 +96,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openLogsFolder: () => ipcRenderer.send('open-logs-folder'),
   getDiagnostics: () => ipcRenderer.invoke('get-diagnostics'),
   getAudioOutputInfo: () => ipcRenderer.invoke('get-audio-output-info'),
-  googleLogin: () => ipcRenderer.invoke('google-login'),
-  googleLogout: () => ipcRenderer.invoke('google-logout'),
-  googleAuthStatus: () => ipcRenderer.invoke('google-auth-status'),
-  googleImportLibrary: (opts) => ipcRenderer.invoke('google-import-library', opts),
-  youtubePlaybackLogin: () => ipcRenderer.invoke('youtube-playback-login'),
-  youtubePlaybackLogout: () => ipcRenderer.invoke('youtube-playback-logout'),
-  youtubePlaybackStatus: () => ipcRenderer.invoke('youtube-playback-status'),
-  onYoutubePlaybackAuth: (callback) => ipcRenderer.on('youtube-playback-auth', (event, result) => callback(result)),
   savePlaylistsJson: (payload) => ipcRenderer.invoke('save-playlists-json', payload),
   showPlaylistContextMenu: (playlistId, options) => ipcRenderer.invoke('show-playlist-context-menu', playlistId, options),
   accountExport: (payload) => ipcRenderer.invoke('account-export', payload),

@@ -27,7 +27,7 @@ function ffmpegAsset() {
 function get(url, redirects = 6, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
-      headers: Object.assign({ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Riff/43.1' }, extraHeaders),
+      headers: Object.assign({ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) HeadRoom/43.1' }, extraHeaders),
       timeout: 25000
     }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
@@ -350,27 +350,12 @@ async function ensureTools() {
 }
 
 async function updateYtDlpIfManaged() {
-  const bin = resolveBinary('yt-dlp');
-  if (!bin || path.dirname(bin) !== BIN_DIR) return false;
-  try {
-    const last = Number(fs.readFileSync(STAMP, 'utf8')) || 0;
-    if (Date.now() - last < 24 * 3600 * 1000) return false;
-  } catch (e) {}
-  try {
-    await run(bin, ['-U'], 120000);
-    if (!fs.existsSync(bin)) {
-      try { logger.log('warn', 'yt-dlp disappeared after self-update, reinstalling'); } catch (_) {}
-      await installYtDlp();
-    }
-    clearBinaryCache();
-    resolveBinary('yt-dlp');
-    fs.writeFileSync(STAMP, String(Date.now()));
-    return true;
-  } catch (e) {
-    clearBinaryCache();
-    try { logger.error('yt-dlp update failed', e); } catch (_) {}
-    return false;
-  }
+  const changed = await require('../shared/bundled-tools').updateBundledTools({
+    root: BIN_DIR,
+    bundledDir: path.join(process.resourcesPath || path.join(__dirname, '../..'), 'bin')
+  });
+  if (changed) clearBinaryCache();
+  return changed;
 }
 
 module.exports = { ensureTools, toolsStatus, checkStatus, updateYtDlpIfManaged, expectedHash, ytDlpAsset, ffmpegAsset, tryWingetInstall, safeMoveBinary };
