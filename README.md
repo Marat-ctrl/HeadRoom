@@ -38,15 +38,15 @@ Playback and import availability depend on the source services. Report beta issu
 
 ### Home and My Wave
 
-![HeadRoom home screen with My Wave and liked songs](github/screenshots/home.png)
+![HeadRoom home screen with My Wave and liked songs](https://raw.githubusercontent.com/Marat-ctrl/HeadRoom/main/github/screenshots/home.png?v=2)
 
 ### Expanded player
 
-![HeadRoom expanded player with synchronized lyrics and playback controls](github/screenshots/expanded-player.png)
+![HeadRoom expanded player with synchronized lyrics and playback controls](https://raw.githubusercontent.com/Marat-ctrl/HeadRoom/main/github/screenshots/expanded-player.png?v=2)
 
 ### Playback settings
 
-![HeadRoom playback settings with audio quality and crossfade controls](github/screenshots/playback-settings.png)
+![HeadRoom playback settings with audio quality and crossfade controls](https://raw.githubusercontent.com/Marat-ctrl/HeadRoom/main/github/screenshots/playback-settings.png?v=2)
 
 ## Support HeadRoom
 
