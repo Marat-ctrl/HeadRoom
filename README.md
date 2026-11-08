@@ -1,10 +1,26 @@
-# HeadRoom
+<p align="center">
+  <img src="banner.png" width="100%" alt="HeadRoom">
+</p>
 
-HeadRoom is a music player for Mac with Apple Silicon. The current release is a public beta.
+<h1 align="center">HeadRoom</h1>
+
+<p align="center">An open-source music player for Mac with Apple Silicon. Now in public beta.</p>
+
+<p align="center">
+  <a href="https://github.com/Marat-ctrl/HeadRoom/releases">Download</a> ·
+  <a href="https://github.com/Marat-ctrl/HeadRoom/issues">Report a bug</a> ·
+  <a href="https://www.donationalerts.com/r/sh4wty9">Support HeadRoom</a>
+</p>
 
 ## Download
 
-Download the macOS ARM64 ZIP from [GitHub Releases](https://github.com/Marat-ctrl/HeadRoom/releases). Unzip it and move **HeadRoom.app** to **Applications**.
+Get the [latest beta](https://github.com/Marat-ctrl/HeadRoom/releases) for Mac with Apple Silicon (ARM64).
+
+1. Download and open the **DMG**.
+2. Drag **HeadRoom** into **Applications**.
+3. Open HeadRoom from **Applications**.
+
+The **ZIP** is also available on the release page. Extract it and move **HeadRoom.app** to **Applications**.
 
 This beta uses an ad-hoc signature and is not notarized. If macOS blocks it on first launch, try opening it once, then go to **System Settings → Privacy & Security → Open Anyway**.
 
@@ -17,6 +33,10 @@ This beta uses an ad-hoc signature and is not notarized. If macOS blocks it on f
 - Playlist import from public Spotify, Yandex Music and VK Music links where track data is available.
 
 Playback and import availability depend on the source services. Report beta issues on [GitHub Issues](https://github.com/Marat-ctrl/HeadRoom/issues).
+
+## Support HeadRoom
+
+If you enjoy using HeadRoom, you can help support its development. [Donate on DonationAlerts](https://www.donationalerts.com/r/sh4wty9) · [Creator page](https://www.donationalerts.com/c/sh4wty9)
 
 ## Development
 
